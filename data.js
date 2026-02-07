@@ -69,3 +69,4 @@ window.COURSES = [
   { id:"IE-0479", name:"Ingeniería Económica",             cycle:"VIII",credits:3, prereq:["IE-0501"], co:[] },
   { id:"OPT-II",  name:"Optativa II",                      cycle:"VIII",credits:3, prereq:[], co:[] },
 ];
+
