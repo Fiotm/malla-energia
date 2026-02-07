@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Malla interactiva – Bloqueo por requisitos</title>
+  <title>Malla interactiva – Bloqueo + créditos</title>
   <style>
     :root { color-scheme: dark; }
     body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background:#0b0f14; color:#e8eef6;}
@@ -12,11 +12,19 @@
     input { background:#0f1620; border:1px solid #223146; color:#e8eef6; padding:8px 10px; border-radius:10px; outline:none; min-width:240px;}
     button { background:#0f1620; border:1px solid #223146; color:#e8eef6; padding:8px 10px; border-radius:10px; cursor:pointer; }
     button:hover { border-color:#3a557a; }
-    .hint { font-size:12px; opacity:.85; margin-top:6px; }
+    .hint { font-size:12px; opacity:.85; margin-top:6px; line-height:1.25; }
+
+    .statsWrap { margin-top:10px; display:flex; flex-direction:column; gap:8px; }
+    .statsLine { display:flex; gap:10px; flex-wrap:wrap; align-items:center; font-size:13px; }
+    .pill { padding:5px 10px; border:1px solid #223146; border-radius:999px; background:#0f1620; }
+    .bar { height:12px; border-radius:999px; overflow:hidden; border:1px solid #223146; background:#0f1620; }
+    .fill { height:100%; width:0%; background:#e8eef6; }
+
     .board { display:grid; grid-template-columns: repeat(8, minmax(220px, 1fr)); gap:12px; padding:14px; }
     .col { border:1px solid #1b2533; border-radius:14px; background:#0f1620; overflow:hidden; min-height:240px; }
     .col h3 { margin:0; padding:12px; font-size:14px; border-bottom:1px solid #1b2533; letter-spacing:.3px; }
     .list { padding:10px; display:flex; flex-direction:column; gap:10px; }
+
     .card { border:1px solid #223146; border-radius:14px; padding:10px; background:#0b0f14; cursor:pointer; position:relative; }
     .card:hover { border-color:#3a557a; }
     .id { font-weight:800; font-size:13px; }
@@ -25,14 +33,14 @@
     .tag { padding:3px 8px; border:1px solid #223146; border-radius:999px; background:#0f1620; }
     .approved { outline:2px solid rgba(232,238,246,.75); }
     .locked { opacity:.45; cursor:not-allowed; }
-    .locked::after{
-      content:"🔒";
-      position:absolute; top:8px; right:10px; font-size:14px; opacity:.8;
-    }
+    .locked::after{ content:"🔒"; position:absolute; top:8px; right:10px; font-size:14px; opacity:.8; }
+
     .deps { font-size:11px; opacity:.85; margin-top:8px; }
     .deps b { opacity:1; }
+
     .toast { position:fixed; left:12px; bottom:12px; background:#0f1620; border:1px solid #223146; border-radius:12px; padding:10px 12px; font-size:12px; opacity:0; transform:translateY(6px); transition:.2s; }
     .toast.show { opacity:1; transform:translateY(0); }
+
     @media (max-width: 1100px){
       .board{ grid-template-columns: repeat(2, minmax(220px, 1fr)); }
     }
@@ -45,9 +53,16 @@
       <input id="search" placeholder="Buscar: IE-0309, 'Circuitos', etc." />
       <button id="reset">Reset</button>
     </div>
-    <div class="hint">
-      🔓 Se desbloquea cuando cumplís <b>todos</b> los requisitos obligatorios (REQ). <br>
-      “CO” es opcional y no bloquea. Tu progreso se guarda en este navegador (localStorage).
+
+    <div class="statsWrap">
+      <div class="statsLine" id="statsLine">
+        <!-- se llena con JS -->
+      </div>
+      <div class="bar"><div class="fill" id="fill"></div></div>
+      <div class="hint">
+        🔓 Se desbloquea cuando cumplís <b>todos</b> los requisitos obligatorios (REQ).<br>
+        “CO” es opcional y no bloquea. Tu progreso se guarda en este navegador.
+      </div>
     </div>
   </header>
 
@@ -57,8 +72,7 @@
   <script src="./data.js"></script>
   <script>
     const cycles = ["I","II","III","IV","V","VI","VII","VIII"];
-    const byId = new Map(window.COURSES.map(c => [c.id, c]));
-    const LS_KEY = "malla_energia_aprobadas_v1";
+    const LS_KEY = "malla_energia_aprobadas_v2"; // cambió key para evitar choque con versiones viejas
 
     function loadApproved(){
       try {
@@ -74,7 +88,6 @@
     let approved = loadApproved();
 
     function isUnlocked(course){
-      // desbloqueada si TODOS los prerequisitos obligatorios están aprobados
       return (course.prereq || []).every(id => approved.has(id));
     }
 
@@ -89,7 +102,45 @@
       setTimeout(()=>el.classList.remove("show"), 1200);
     }
 
+    function toNum(x){
+      const n = Number(x);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function totalCredits(){
+      return window.COURSES.reduce((sum, c) => sum + toNum(c.credits), 0);
+    }
+
+    function approvedCredits(){
+      let sum = 0;
+      for (const c of window.COURSES){
+        if (approved.has(c.id)) sum += toNum(c.credits);
+      }
+      return sum;
+    }
+
+    function approvedCount(){
+      return window.COURSES.filter(c => approved.has(c.id)).length;
+    }
+
+    function updateStats(){
+      const aC = approvedCredits();
+      const tC = totalCredits();
+      const aN = approvedCount();
+      const tN = window.COURSES.length;
+
+      const pct = tC > 0 ? Math.round((aC / tC) * 100) : 0;
+
+      document.querySelector("#statsLine").innerHTML = `
+        <span class="pill"><b>Créditos:</b> ${aC} / ${tC} (${pct}%)</span>
+        <span class="pill"><b>Cursos:</b> ${aN} / ${tN}</span>
+      `;
+      document.querySelector("#fill").style.width = pct + "%";
+    }
+
     function render(){
+      updateStats();
+
       const q = document.querySelector("#search").value.trim().toLowerCase();
       const board = document.querySelector("#board");
       board.innerHTML = "";
@@ -125,12 +176,10 @@
           `;
 
           card.addEventListener("click", () => {
-            // Si está bloqueada y no está aprobada, no permitir
             if(!unlocked && !done){
               toast("Bloqueada: primero aprobá los requisitos REQ.");
               return;
             }
-
             if(approved.has(c.id)){
               approved.delete(c.id);
               saveApproved(approved);
