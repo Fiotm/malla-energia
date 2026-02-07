@@ -3,225 +3,162 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Malla interactiva – Sistemas de Energía (UCR)</title>
+  <title>Malla interactiva – Bloqueo por requisitos</title>
   <style>
     :root { color-scheme: dark; }
     body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background:#0b0f14; color:#e8eef6;}
     header { padding:14px 16px; border-bottom:1px solid #1b2533; position:sticky; top:0; background:#0b0f14; z-index:5;}
     .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-    select, input { background:#0f1620; border:1px solid #223146; color:#e8eef6; padding:8px 10px; border-radius:10px; outline:none; }
+    input { background:#0f1620; border:1px solid #223146; color:#e8eef6; padding:8px 10px; border-radius:10px; outline:none; min-width:240px;}
+    button { background:#0f1620; border:1px solid #223146; color:#e8eef6; padding:8px 10px; border-radius:10px; cursor:pointer; }
+    button:hover { border-color:#3a557a; }
     .hint { font-size:12px; opacity:.85; margin-top:6px; }
-    #graph { width:100vw; height: calc(100vh - 84px); }
-    .chip { display:inline-flex; gap:6px; align-items:center; padding:6px 10px; border:1px solid #223146; border-radius:999px; background:#0f1620; font-size:12px;}
-    .dot { width:10px; height:10px; border-radius:999px; display:inline-block; }
-    .dot.req { background:#e8eef6; }
-    .dot.co  { background:#e8eef6; opacity:.5; }
-    .tooltip {
-      position:fixed; pointer-events:none; transform:translate(12px, 12px);
-      background:#0f1620; border:1px solid #223146; border-radius:12px; padding:10px 12px;
-      max-width:320px; box-shadow: 0 10px 30px rgba(0,0,0,.35); display:none;
+    .board { display:grid; grid-template-columns: repeat(8, minmax(220px, 1fr)); gap:12px; padding:14px; }
+    .col { border:1px solid #1b2533; border-radius:14px; background:#0f1620; overflow:hidden; min-height:240px; }
+    .col h3 { margin:0; padding:12px; font-size:14px; border-bottom:1px solid #1b2533; letter-spacing:.3px; }
+    .list { padding:10px; display:flex; flex-direction:column; gap:10px; }
+    .card { border:1px solid #223146; border-radius:14px; padding:10px; background:#0b0f14; cursor:pointer; position:relative; }
+    .card:hover { border-color:#3a557a; }
+    .id { font-weight:800; font-size:13px; }
+    .name { font-size:12px; opacity:.92; margin-top:3px; line-height:1.25; }
+    .meta { margin-top:8px; font-size:11px; opacity:.8; display:flex; gap:10px; flex-wrap:wrap; }
+    .tag { padding:3px 8px; border:1px solid #223146; border-radius:999px; background:#0f1620; }
+    .approved { outline:2px solid rgba(232,238,246,.75); }
+    .locked { opacity:.45; cursor:not-allowed; }
+    .locked::after{
+      content:"🔒";
+      position:absolute; top:8px; right:10px; font-size:14px; opacity:.8;
     }
-    .tooltip .t { font-weight:700; margin-bottom:4px;}
-    .tooltip .s { font-size:12px; opacity:.9; line-height:1.25;}
-    a { color:#9ed0ff; }
+    .deps { font-size:11px; opacity:.85; margin-top:8px; }
+    .deps b { opacity:1; }
+    .toast { position:fixed; left:12px; bottom:12px; background:#0f1620; border:1px solid #223146; border-radius:12px; padding:10px 12px; font-size:12px; opacity:0; transform:translateY(6px); transition:.2s; }
+    .toast.show { opacity:1; transform:translateY(0); }
+    @media (max-width: 1100px){
+      .board{ grid-template-columns: repeat(2, minmax(220px, 1fr)); }
+    }
   </style>
 </head>
 <body>
   <header>
     <div class="row">
-      <div style="font-weight:800;">Malla interactiva – Énfasis Sistemas de Energía</div>
-      <span class="chip"><span class="dot req"></span>Requisito obligatorio</span>
-      <span class="chip"><span class="dot co"></span>CO: opcional (punteado)</span>
+      <div style="font-weight:900;">Malla interactiva (clic = aprobar / desaprobar)</div>
+      <input id="search" placeholder="Buscar: IE-0309, 'Circuitos', etc." />
+      <button id="reset">Reset</button>
     </div>
-    <div class="row" style="margin-top:10px;">
-      <label>
-        Ciclo:
-        <select id="cycle">
-          <option value="ALL">Todos</option>
-          <option value="I">I</option><option value="II">II</option><option value="III">III</option><option value="IV">IV</option>
-          <option value="V">V</option><option value="VI">VI</option><option value="VII">VII</option><option value="VIII">VIII</option>
-        </select>
-      </label>
-
-      <label>
-        Buscar:
-        <input id="search" placeholder="Ej: IE-0309 o Circuitos..." />
-      </label>
-
-      <label>
-        Mostrar optativas:
-        <select id="opt">
-          <option value="NO">No</option>
-          <option value="YES">Sí</option>
-        </select>
-      </label>
-
-      <span class="hint">Tip: rueda = zoom, arrastrar = mover nodos, doble click = centrar.</span>
+    <div class="hint">
+      🔓 Se desbloquea cuando cumplís <b>todos</b> los requisitos obligatorios (REQ). <br>
+      “CO” es opcional y no bloquea. Tu progreso se guarda en este navegador (localStorage).
     </div>
   </header>
 
-  <svg id="graph"></svg>
-  <div id="tip" class="tooltip"></div>
+  <div id="board" class="board"></div>
+  <div id="toast" class="toast"></div>
 
-  <!-- D3 -->
-  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   <script src="./data.js"></script>
-
   <script>
-    const svg = d3.select("#graph");
-    const tip = d3.select("#tip");
-    const W = () => window.innerWidth;
-    const H = () => window.innerHeight - 84;
+    const cycles = ["I","II","III","IV","V","VI","VII","VIII"];
+    const byId = new Map(window.COURSES.map(c => [c.id, c]));
+    const LS_KEY = "malla_energia_aprobadas_v1";
 
-    function colorByCycle(cycle){
-      // sin fijar colores “exactos” por requisito del sistema? (esto es HTML, no matplotlib)
-      // uso tonos suaves calculados por ciclo:
-      const map = {I: 210, II: 180, III: 150, IV: 120, V: 90, VI: 60, VII: 30, VIII: 0, X: 260};
-      const h = map[cycle] ?? 200;
-      return `hsl(${h} 60% 55%)`;
+    function loadApproved(){
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if(!raw) return new Set();
+        return new Set(JSON.parse(raw));
+      } catch { return new Set(); }
+    }
+    function saveApproved(set){
+      localStorage.setItem(LS_KEY, JSON.stringify([...set]));
     }
 
-    function build(filtered){
-      svg.selectAll("*").remove();
-      svg.attr("width", W()).attr("height", H());
+    let approved = loadApproved();
 
-      const g = svg.append("g");
-      const zoom = d3.zoom().scaleExtent([0.25, 3]).on("zoom", (e) => g.attr("transform", e.transform));
-      svg.call(zoom);
-
-      // defs for arrows
-      const defs = svg.append("defs");
-      defs.append("marker")
-        .attr("id","arrowSolid")
-        .attr("viewBox","0 -5 10 10")
-        .attr("refX", 16).attr("refY", 0)
-        .attr("markerWidth", 6).attr("markerHeight", 6)
-        .attr("orient","auto")
-        .append("path").attr("d","M0,-5L10,0L0,5").attr("fill","#e8eef6");
-
-      defs.append("marker")
-        .attr("id","arrowDash")
-        .attr("viewBox","0 -5 10 10")
-        .attr("refX", 16).attr("refY", 0)
-        .attr("markerWidth", 6).attr("markerHeight", 6)
-        .attr("orient","auto")
-        .append("path").attr("d","M0,-5L10,0L0,5").attr("fill","#e8eef6").attr("opacity",0.6);
-
-      const nodes = filtered.nodes.map(d => ({...d}));
-      const nodeById = new Map(nodes.map(n => [n.id, n]));
-
-      const links = filtered.links
-        .filter(l => nodeById.has(l.source) && nodeById.has(l.target))
-        .map(l => ({...l}));
-
-      const sim = d3.forceSimulation(nodes)
-        .force("link", d3.forceLink(links).id(d => d.id).distance(l => l.type === "CO" ? 120 : 90).strength(0.9))
-        .force("charge", d3.forceManyBody().strength(-520))
-        .force("center", d3.forceCenter(W()/2, H()/2))
-        .force("collide", d3.forceCollide().radius(36));
-
-      const link = g.append("g")
-        .attr("stroke","#e8eef6")
-        .attr("stroke-opacity",0.75)
-        .selectAll("line")
-        .data(links)
-        .join("line")
-        .attr("stroke-width", l => l.type === "CO" ? 1.5 : 2.2)
-        .attr("stroke-dasharray", l => l.type === "CO" ? "6,6" : null)
-        .attr("marker-end", l => l.type === "CO" ? "url(#arrowDash)" : "url(#arrowSolid)");
-
-      const node = g.append("g")
-        .selectAll("g")
-        .data(nodes)
-        .join("g")
-        .call(d3.drag()
-          .on("start", (e,d)=>{ if(!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
-          .on("drag", (e,d)=>{ d.fx=e.x; d.fy=e.y; })
-          .on("end", (e,d)=>{ if(!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; })
-        );
-
-      node.append("circle")
-        .attr("r", 22)
-        .attr("fill", d => colorByCycle(d.cycle ?? "X"))
-        .attr("fill-opacity", 0.95)
-        .attr("stroke", "#0b0f14")
-        .attr("stroke-width", 2);
-
-      node.append("text")
-        .attr("text-anchor","middle")
-        .attr("dy","0.35em")
-        .attr("font-size", 10.5)
-        .attr("font-weight", 800)
-        .text(d => d.code ?? d.id);
-
-      node.on("mousemove", (e,d)=>{
-        tip.style("display","block")
-          .style("left", `${e.clientX}px`)
-          .style("top", `${e.clientY}px`)
-          .html(`
-            <div class="t">${d.code ?? d.id} — ${d.name}</div>
-            <div class="s">
-              <div><b>Ciclo:</b> ${d.cycle ?? "—"} | <b>Créditos:</b> ${d.credits ?? "—"}</div>
-              <div style="margin-top:6px; opacity:.9">${d.note ?? ""}</div>
-            </div>
-          `);
-      }).on("mouseleave", ()=>{
-        tip.style("display","none");
-      });
-
-      svg.on("dblclick.zoom", null);
-      svg.on("dblclick", () => {
-        svg.transition().duration(350).call(zoom.transform, d3.zoomIdentity);
-      });
-
-      sim.on("tick", ()=>{
-        link
-          .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
-          .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
-
-        node.attr("transform", d => `translate(${d.x},${d.y})`);
-      });
-
-      // keep inside bounds
-      sim.on("tick.boundary", ()=>{
-        nodes.forEach(n=>{
-          n.x = Math.max(30, Math.min(W()-30, n.x));
-          n.y = Math.max(30, Math.min(H()-30, n.y));
-        });
-      });
+    function isUnlocked(course){
+      // desbloqueada si TODOS los prerequisitos obligatorios están aprobados
+      return (course.prereq || []).every(id => approved.has(id));
     }
 
-    function filterData(){
-      const cycle = document.querySelector("#cycle").value;
+    function missingReqs(course){
+      return (course.prereq || []).filter(id => !approved.has(id));
+    }
+
+    function toast(msg){
+      const el = document.querySelector("#toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      setTimeout(()=>el.classList.remove("show"), 1200);
+    }
+
+    function render(){
       const q = document.querySelector("#search").value.trim().toLowerCase();
-      const showOpt = document.querySelector("#opt").value === "YES";
+      const board = document.querySelector("#board");
+      board.innerHTML = "";
 
-      let nodes = DATA.nodes.filter(n => showOpt ? true : (n.group !== "OPT"));
-      if (cycle !== "ALL") nodes = nodes.filter(n => n.cycle === cycle);
+      for(const cy of cycles){
+        const col = document.createElement("div");
+        col.className = "col";
+        col.innerHTML = `<h3>Ciclo ${cy}</h3><div class="list"></div>`;
+        const list = col.querySelector(".list");
 
-      if (q){
-        nodes = nodes.filter(n => (n.id+n.code+n.name).toLowerCase().includes(q));
-        // también traer vecinos directos para que no quede “solo”
-        const keep = new Set(nodes.map(n => n.id));
-        DATA.links.forEach(l=>{
-          if (keep.has(l.source)) keep.add(l.target);
-          if (keep.has(l.target)) keep.add(l.source);
-        });
-        nodes = DATA.nodes.filter(n => keep.has(n.id) && (showOpt ? true : n.group !== "OPT") && (cycle==="ALL" ? true : n.cycle===cycle || n.cycle==null));
+        const courses = window.COURSES
+          .filter(c => c.cycle === cy)
+          .filter(c => !q || (c.id + " " + c.name).toLowerCase().includes(q));
+
+        for(const c of courses){
+          const unlocked = isUnlocked(c);
+          const done = approved.has(c.id);
+
+          const card = document.createElement("div");
+          card.className = "card" + (done ? " approved" : "") + (!unlocked && !done ? " locked" : "");
+          card.innerHTML = `
+            <div class="id">${c.id}</div>
+            <div class="name">${c.name}</div>
+            <div class="meta">
+              <span class="tag">Créditos: ${c.credits ?? "—"}</span>
+              <span class="tag">${done ? "✅ Aprobada" : (unlocked ? "🟢 Disponible" : "🟡 Bloqueada")}</span>
+            </div>
+            <div class="deps">
+              <b>REQ:</b> ${(c.prereq && c.prereq.length) ? c.prereq.join(", ") : "—"}
+              ${ (c.co && c.co.length) ? `<br><b>CO:</b> ${c.co.join(", ")}` : "" }
+              ${ (!unlocked && !done && missingReqs(c).length) ? `<br><b>Faltan:</b> ${missingReqs(c).join(", ")}` : "" }
+            </div>
+          `;
+
+          card.addEventListener("click", () => {
+            // Si está bloqueada y no está aprobada, no permitir
+            if(!unlocked && !done){
+              toast("Bloqueada: primero aprobá los requisitos REQ.");
+              return;
+            }
+
+            if(approved.has(c.id)){
+              approved.delete(c.id);
+              saveApproved(approved);
+              toast("Marcada como NO aprobada");
+            } else {
+              approved.add(c.id);
+              saveApproved(approved);
+              toast("Marcada como aprobada ✅");
+            }
+            render();
+          });
+
+          list.appendChild(card);
+        }
+
+        board.appendChild(col);
       }
-
-      const nodeIds = new Set(nodes.map(n => n.id));
-      const links = DATA.links.filter(l => nodeIds.has(l.source) && nodeIds.has(l.target));
-
-      build({nodes, links});
     }
 
-    window.addEventListener("resize", filterData);
-    document.querySelector("#cycle").addEventListener("change", filterData);
-    document.querySelector("#opt").addEventListener("change", filterData);
-    document.querySelector("#search").addEventListener("input", filterData);
+    document.querySelector("#search").addEventListener("input", render);
+    document.querySelector("#reset").addEventListener("click", () => {
+      approved = new Set();
+      saveApproved(approved);
+      toast("Progreso reiniciado");
+      render();
+    });
 
-    filterData();
+    render();
   </script>
 </body>
 </html>
